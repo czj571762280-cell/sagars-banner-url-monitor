@@ -22,7 +22,7 @@ jobs:
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
-          TARGET_URLS: "https://dy2q74h86jiwd.cloudfront.net/static/images/info/130850/news_banner_20251015.png,https://dy2q74h86jiwd.cloudfront.net/static/images/info/130850/news_banner_20251018.png"   # ← 这里改成你自己的网址
+          TARGET_URLS: "https://dy2q74h86jiwd.cloudfront.net/static/images/info/130850/news_banner_20251025.png,https://dy2q74h86jiwd.cloudfront.net/static/images/info/130850/news_banner_20251018.png"   # ← 这里改成你自己的网址
         run: |
           python3 - <<'PY'
           import os, requests, smtplib, ssl
