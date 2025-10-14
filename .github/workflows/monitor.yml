@@ -1,0 +1,87 @@
+name: Monitor URL and Send Email
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'   # 每30分钟执行一次
+  workflow_dispatch:          # 允许手动触发（可在Actions界面点Run）
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run monitor script
+        env:
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          TO_EMAIL: ${{ secrets.TO_EMAIL }}
+          TARGET_URL: ${{ secrets.TARGET_URL }}
+        run: |
+          python3 - <<'PY'
+          import smtplib, ssl, requests, hashlib, os
+          from email.mime.text import MIMEText
+          from email.mime.multipart import MIMEMultipart
+          from datetime import datetime
+
+          url = os.environ['TARGET_URL']
+          smtp_server = os.environ['SMTP_SERVER']
+          smtp_port = int(os.environ['SMTP_PORT'])
+          username = os.environ['SMTP_USERNAME']
+          password = os.environ['SMTP_PASSWORD']
+          to_email = os.environ['TO_EMAIL']
+
+          hash_file = "last_hash.txt"
+
+          # 获取网页内容并计算哈希
+          try:
+              r = requests.get(url, timeout=30)
+              r.raise_for_status()
+              new_hash = hashlib.sha256(r.content).hexdigest()
+          except Exception as e:
+              print("❌ 请求失败：", e)
+              exit(1)
+
+          old_hash = None
+          if os.path.exists(hash_file):
+              old_hash = open(hash_file).read().strip()
+
+          if old_hash != new_hash:
+              print("🔔 检测到网页内容变化，发送邮件通知！")
+
+              # 构造邮件
+              msg = MIMEMultipart("alternative")
+              msg["Subject"] = f"网页更新通知：{url}"
+              msg["From"] = username
+              msg["To"] = to_email
+              text = f"时间：{datetime.now()}\n网址：{url}\n\n检测到网页内容发生变化。"
+              msg.attach(MIMEText(text, "plain"))
+
+              # 发送邮件
+              context = ssl.create_default_context()
+              try:
+                  if smtp_port == 465:
+                      with smtplib.SMTP_SSL(smtp_server, smtp_port, context=context) as server:
+                          server.login(username, password)
+                          server.sendmail(username, to_email, msg.as_string())
+                  else:
+                      with smtplib.SMTP(smtp_server, smtp_port) as server:
+                          server.starttls(context=context)
+                          server.login(username, password)
+                          server.sendmail(username, to_email, msg.as_string())
+                  print("✅ 邮件已发送成功！")
+              except Exception as e:
+                  print("❌ 邮件发送失败：", e)
+
+              # 保存最新哈希
+              with open(hash_file, "w") as f:
+                  f.write(new_hash)
+          else:
+              print(f"{datetime.now()} - 内容无变化。")
+          PY
