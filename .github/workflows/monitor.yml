@@ -22,7 +22,9 @@ jobs:
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
-          TARGET_URLS: "https://dy2q74h86jiwd.cloudfront.net/static/images/info/130850/news_banner_20251025.png,https://dy2q74h86jiwd.cloudfront.net/static/images/info/130850/news_banner_20251018.png"   # ← 这里改成你自己的网址
+          TARGET_URLS: |
+            https://dy2q74h86jiwd.cloudfront.net/static/images/info/130849/news_banner_20251008.png
+            https://dy2q74h86jiwd.cloudfront.net/static/images/info/130849/news_banner_20251200.png
         run: |
           python3 - <<'PY'
           import os, requests, smtplib, ssl
@@ -35,12 +37,14 @@ jobs:
           username = os.environ['SMTP_USERNAME']
           password = os.environ['SMTP_PASSWORD']
           to_email = os.environ['TO_EMAIL']
-          urls = [u.strip() for u in os.environ['TARGET_URLS'].split(",") if u.strip()]
-          context = ssl.create_default_context()
 
+          # 多行写法处理
+          urls_raw = os.environ['TARGET_URLS']
+          urls = [u.strip() for u in urls_raw.splitlines() if u.strip()]
+
+          context = ssl.create_default_context()
           done_flag = "done.flag"
 
-          # 如果已经发送过一次，则退出
           if os.path.exists(done_flag):
               print("✅ 检测已完成（存在 done.flag），不再执行。")
               exit(0)
@@ -62,7 +66,6 @@ jobs:
                   print(f"❌ {url} 请求失败：{e}")
 
           if has_info_urls:
-              # 发邮件
               msg = MIMEMultipart("alternative")
               msg["Subject"] = "检测到网页有内容"
               msg["From"] = username
@@ -84,7 +87,6 @@ jobs:
               except Exception as e:
                   print(f"❌ 邮件发送失败：{e}")
 
-              # 写入标记文件，防止再次运行
               with open(done_flag, "w") as f:
                   f.write("done")
               print("✅ 已生成 done.flag，下次将自动停止检测。")
