@@ -23,8 +23,10 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
           TARGET_URLS: |
-            https://dy2q74h86jiwd.cloudfront.net/static/images/info/130849/news_banner_20251008.png
-            https://dy2q74h86jiwd.cloudfront.net/static/images/info/130849/news_banner_20251200.png
+            https://dy2q74h86jiwd.cloudfront.net/static/images/info/130851/news_banner_20251022.png
+            https://dy2q74h86jiwd.cloudfront.net/static/images/info/130850/news_banner_20251023.png
+            https://dy2q74h86jiwd.cloudfront.net/static/images/info/130850/news_banner_20251024.png
+            https://dy2q74h86jiwd.cloudfront.net/static/images/info/130850/news_banner_20251025.png
         run: |
           python3 - <<'PY'
           import os, requests, smtplib, ssl
