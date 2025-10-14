@@ -1,8 +1,8 @@
-name: Monitor Multiple URLs and Send Email
+name: Detect URL Once and Notify
 
 on:
   schedule:
-    - cron: '*/30 * * * *'   # 每30分钟执行一次
+    - cron: '*/30 * * * *'   # 每30分钟检测一次
   workflow_dispatch:
 
 jobs:
@@ -15,18 +15,17 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Run monitor script
+      - name: Run one-time monitor
         env:
           SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
-          # 这里你可以把多个URL放进去，用英文逗号分隔
-          TARGET_URLS: "https://dy2q74h86jiwd.cloudfront.net/static/images/info/130850/news_banner_20251015.png,https://dy2q74h86jiwd.cloudfront.net/static/images/info/130850/news_banner_20251017.png"
+          TARGET_URLS: "https://dy2q74h86jiwd.cloudfront.net/static/images/info/130850/news_banner_20251015.png,https://dy2q74h86jiwd.cloudfront.net/static/images/info/130850/news_banner_20251018.png"   # ← 这里改成你自己的网址
         run: |
           python3 - <<'PY'
-          import smtplib, ssl, requests, hashlib, os
+          import os, requests, smtplib, ssl
           from email.mime.text import MIMEText
           from email.mime.multipart import MIMEMultipart
           from datetime import datetime
@@ -36,47 +35,40 @@ jobs:
           username = os.environ['SMTP_USERNAME']
           password = os.environ['SMTP_PASSWORD']
           to_email = os.environ['TO_EMAIL']
-
-          # 读取URL列表
           urls = [u.strip() for u in os.environ['TARGET_URLS'].split(",") if u.strip()]
-          if not urls:
-              print("❌ 没有设置要监控的URL。")
-              exit(1)
-
-          changed_urls = []
           context = ssl.create_default_context()
+
+          done_flag = "done.flag"
+
+          # 如果已经发送过一次，则退出
+          if os.path.exists(done_flag):
+              print("✅ 检测已完成（存在 done.flag），不再执行。")
+              exit(0)
+
+          has_info_urls = []
 
           for url in urls:
               print(f"🔍 检查：{url}")
-              hash_file = f"hash_{hashlib.md5(url.encode()).hexdigest()}.txt"
               try:
                   r = requests.get(url, timeout=30)
                   r.raise_for_status()
-                  new_hash = hashlib.sha256(r.content).hexdigest()
+                  text = r.text.strip()
+                  if len(text) > 0:
+                      print(f"⚠️ 发现 {url} 有内容！")
+                      has_info_urls.append(url)
+                  else:
+                      print(f"✅ {url} 为空，无信息。")
               except Exception as e:
                   print(f"❌ {url} 请求失败：{e}")
-                  continue
 
-              old_hash = None
-              if os.path.exists(hash_file):
-                  old_hash = open(hash_file).read().strip()
-
-              if old_hash != new_hash:
-                  print(f"⚠️ {url} 内容变化！")
-                  changed_urls.append(url)
-                  with open(hash_file, "w") as f:
-                      f.write(new_hash)
-              else:
-                  print(f"✅ {url} 无变化。")
-
-          if changed_urls:
-              print("🔔 检测到有网页发生变化，发送邮件！")
+          if has_info_urls:
+              # 发邮件
               msg = MIMEMultipart("alternative")
-              msg["Subject"] = "网页更新通知"
+              msg["Subject"] = "检测到网页有内容"
               msg["From"] = username
               msg["To"] = to_email
-              text = f"时间：{datetime.now()}\n以下网址检测到变化：\n\n" + "\n".join(changed_urls)
-              msg.attach(MIMEText(text, "plain"))
+              body = f"时间：{datetime.now()}\n以下网址检测到非空内容：\n" + "\n".join(has_info_urls)
+              msg.attach(MIMEText(body, "plain"))
 
               try:
                   if smtp_port == 465:
@@ -88,9 +80,14 @@ jobs:
                           server.starttls(context=context)
                           server.login(username, password)
                           server.sendmail(username, to_email, msg.as_string())
-                  print("✅ 邮件已发送成功！")
+                  print("📧 邮件发送成功！")
               except Exception as e:
-                  print("❌ 邮件发送失败：", e)
+                  print(f"❌ 邮件发送失败：{e}")
+
+              # 写入标记文件，防止再次运行
+              with open(done_flag, "w") as f:
+                  f.write("done")
+              print("✅ 已生成 done.flag，下次将自动停止检测。")
           else:
-              print(f"{datetime.now()} - 所有网址无变化。")
+              print("⏳ 所有网址都为空，未发现内容。")
           PY
