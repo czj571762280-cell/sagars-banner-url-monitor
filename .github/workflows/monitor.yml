@@ -1,9 +1,9 @@
-name: Monitor URL and Send Email
+name: Monitor Multiple URLs and Send Email
 
 on:
   schedule:
     - cron: '*/30 * * * *'   # 每30分钟执行一次
-  workflow_dispatch:          # 允许手动触发（可在Actions界面点Run）
+  workflow_dispatch:
 
 jobs:
   monitor:
@@ -22,7 +22,8 @@ jobs:
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
-          TARGET_URL: ${{ secrets.TARGET_URL }}
+          # 这里你可以把多个URL放进去，用英文逗号分隔
+          TARGET_URLS: "https://dy2q74h86jiwd.cloudfront.net/static/images/info/130850/news_banner_20251015.png,https://dy2q74h86jiwd.cloudfront.net/static/images/info/130850/news_banner_20251017.png"
         run: |
           python3 - <<'PY'
           import smtplib, ssl, requests, hashlib, os
@@ -30,41 +31,53 @@ jobs:
           from email.mime.multipart import MIMEMultipart
           from datetime import datetime
 
-          url = os.environ['TARGET_URL']
           smtp_server = os.environ['SMTP_SERVER']
           smtp_port = int(os.environ['SMTP_PORT'])
           username = os.environ['SMTP_USERNAME']
           password = os.environ['SMTP_PASSWORD']
           to_email = os.environ['TO_EMAIL']
 
-          hash_file = "last_hash.txt"
-
-          # 获取网页内容并计算哈希
-          try:
-              r = requests.get(url, timeout=30)
-              r.raise_for_status()
-              new_hash = hashlib.sha256(r.content).hexdigest()
-          except Exception as e:
-              print("❌ 请求失败：", e)
+          # 读取URL列表
+          urls = [u.strip() for u in os.environ['TARGET_URLS'].split(",") if u.strip()]
+          if not urls:
+              print("❌ 没有设置要监控的URL。")
               exit(1)
 
-          old_hash = None
-          if os.path.exists(hash_file):
-              old_hash = open(hash_file).read().strip()
+          changed_urls = []
+          context = ssl.create_default_context()
 
-          if old_hash != new_hash:
-              print("🔔 检测到网页内容变化，发送邮件通知！")
+          for url in urls:
+              print(f"🔍 检查：{url}")
+              hash_file = f"hash_{hashlib.md5(url.encode()).hexdigest()}.txt"
+              try:
+                  r = requests.get(url, timeout=30)
+                  r.raise_for_status()
+                  new_hash = hashlib.sha256(r.content).hexdigest()
+              except Exception as e:
+                  print(f"❌ {url} 请求失败：{e}")
+                  continue
 
-              # 构造邮件
+              old_hash = None
+              if os.path.exists(hash_file):
+                  old_hash = open(hash_file).read().strip()
+
+              if old_hash != new_hash:
+                  print(f"⚠️ {url} 内容变化！")
+                  changed_urls.append(url)
+                  with open(hash_file, "w") as f:
+                      f.write(new_hash)
+              else:
+                  print(f"✅ {url} 无变化。")
+
+          if changed_urls:
+              print("🔔 检测到有网页发生变化，发送邮件！")
               msg = MIMEMultipart("alternative")
-              msg["Subject"] = f"网页更新通知：{url}"
+              msg["Subject"] = "网页更新通知"
               msg["From"] = username
               msg["To"] = to_email
-              text = f"时间：{datetime.now()}\n网址：{url}\n\n检测到网页内容发生变化。"
+              text = f"时间：{datetime.now()}\n以下网址检测到变化：\n\n" + "\n".join(changed_urls)
               msg.attach(MIMEText(text, "plain"))
 
-              # 发送邮件
-              context = ssl.create_default_context()
               try:
                   if smtp_port == 465:
                       with smtplib.SMTP_SSL(smtp_server, smtp_port, context=context) as server:
@@ -78,10 +91,6 @@ jobs:
                   print("✅ 邮件已发送成功！")
               except Exception as e:
                   print("❌ 邮件发送失败：", e)
-
-              # 保存最新哈希
-              with open(hash_file, "w") as f:
-                  f.write(new_hash)
           else:
-              print(f"{datetime.now()} - 内容无变化。")
+              print(f"{datetime.now()} - 所有网址无变化。")
           PY
