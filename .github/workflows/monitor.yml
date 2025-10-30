@@ -23,7 +23,14 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
           TARGET_URLS: |
-            https://info.rs.aktsk.jp/static/images/info/130859/
+            https://info.rs.aktsk.jp/static/images/info/130854/
+            https://info.rs.aktsk.jp/static/images/info/130855/
+            https://info.rs.aktsk.jp/static/images/info/130856/
+            https://info.rs.aktsk.jp/static/images/info/130857/
+            https://info.rs.aktsk.jp/static/images/info/130858/
+            https://info.rs.aktsk.jp/static/images/info/130860/
+            https://info.rs.aktsk.jp/static/images/info/130861/
+            https://info.rs.aktsk.jp/static/images/info/130862/         
         run: |
           python3 - <<'PY'
           import os, requests, smtplib, ssl
