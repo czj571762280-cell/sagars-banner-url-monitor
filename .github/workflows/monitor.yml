@@ -2,7 +2,7 @@ name: Detect URL Once and Notify
 
 on:
   schedule:
-    - cron: '*/60 * * * *'   # 每60分钟检测一次
+    - cron: '*/10 * * * *'   # 每10分钟检测一次
   workflow_dispatch:
 
 jobs:
@@ -23,8 +23,7 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
           TARGET_URLS: |
-            https://dy2q74h86jiwd.cloudfront.net/static/images/info/130851/news_banner_20251023_02_small.png
-            https://dy2q74h86jiwd.cloudfront.net/static/images/info/130851/news_banner_20251024_02_small.png
+            https://info.rs.aktsk.jp/static/images/info/130859/
         run: |
           python3 - <<'PY'
           import os, requests, smtplib, ssl
@@ -38,7 +37,6 @@ jobs:
           password = os.environ['SMTP_PASSWORD']
           to_email = os.environ['TO_EMAIL']
 
-          # 多行写法处理
           urls_raw = os.environ['TARGET_URLS']
           urls = [u.strip() for u in urls_raw.splitlines() if u.strip()]
 
@@ -49,28 +47,28 @@ jobs:
               print("✅ 检测已完成（存在 done.flag），不再执行。")
               exit(0)
 
-          has_info_urls = []
+          forbidden_urls = []
 
           for url in urls:
               print(f"🔍 检查：{url}")
               try:
                   r = requests.get(url, timeout=30)
-                  r.raise_for_status()
-                  text = r.text.strip()
-                  if len(text) > 0:
-                      print(f"⚠️ 发现 {url} 有内容！")
-                      has_info_urls.append(url)
+                  status = r.status_code
+                  print(f"返回状态码：{status}")
+                  if status == 403:
+                      print(f"⚠️ 检测到403：{url}")
+                      forbidden_urls.append(url)
                   else:
-                      print(f"✅ {url} 为空，无信息。")
+                      print(f"✅ {url} 正常（状态码 {status}）")
               except Exception as e:
                   print(f"❌ {url} 请求失败：{e}")
 
-          if has_info_urls:
+          if forbidden_urls:
               msg = MIMEMultipart("alternative")
-              msg["Subject"] = "检测到网页有内容"
+              msg["Subject"] = "检测到403禁止访问"
               msg["From"] = username
               msg["To"] = to_email
-              body = f"时间：{datetime.now()}\n以下网址检测到非空内容：\n" + "\n".join(has_info_urls)
+              body = f"时间：{datetime.now()}\n以下网址返回403 Forbidden：\n" + "\n".join(forbidden_urls)
               msg.attach(MIMEText(body, "plain"))
 
               try:
@@ -91,5 +89,5 @@ jobs:
                   f.write("done")
               print("✅ 已生成 done.flag，下次将自动停止检测。")
           else:
-              print("⏳ 所有网址都为空，未发现内容。")
+              print("⏳ 所有网址均未返回403。")
           PY
